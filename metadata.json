@@ -1,0 +1,6 @@
+{
+  "name": "Oracle AWR Analysis Runbook & Performance Workbench",
+  "description": "Comprehensive Oracle AWR analysis runbook checklist with step-by-step verification rules, thresholds, triage cheat sheets, wait event diagnostics, SQL tuning decision paths, memory advisory rules, automated report generators, and historical trending scripts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
