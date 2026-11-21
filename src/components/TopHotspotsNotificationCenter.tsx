@@ -31,11 +31,7 @@ import {
 import { HotspotItem, AwrBenchmarkScenario, RunbookPhase, VerificationItem } from '../types/awr';
 import { ParsedAwrReport } from '../utils/awrParser';
 import { 
-  exportToExcel, 
-  exportToWord, 
-  exportToPdf, 
-  exportToCsv, 
-  exportToMarkdown, 
+  generateTopIssuesSummaryMarkdown,
   ExportReportData 
 } from '../utils/exportUtils';
 
@@ -51,6 +47,7 @@ interface TopHotspotsNotificationCenterProps {
   phases?: RunbookPhase[];
   checklistItems?: VerificationItem[];
   onOpenExportHub?: () => void;
+  onNavigateToDiagnosticCommands?: () => void;
 }
 
 export const TopHotspotsNotificationCenter: React.FC<TopHotspotsNotificationCenterProps> = ({
@@ -64,7 +61,8 @@ export const TopHotspotsNotificationCenter: React.FC<TopHotspotsNotificationCent
   selectedScenario,
   phases,
   checklistItems,
-  onOpenExportHub
+  onOpenExportHub,
+  onNavigateToDiagnosticCommands
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -119,47 +117,7 @@ export const TopHotspotsNotificationCenter: React.FC<TopHotspotsNotificationCent
   };
 
   const generateMarkdownReport = () => {
-    let md = `# Top 20 AWR Performance Issues Report\n`;
-    md += `Generated: ${new Date().toISOString()}\n`;
-    md += `Critical Bottlenecks: ${criticalCount} | Warnings: ${warningCount} | Attention: ${attentionCount}\n\n`;
-    md += `| Rank | Severity | Category | Issue / SQL_ID | Metric Dimension | % Impact |\n`;
-    md += `|---|---|---|---|---|---|\n`;
-    hotspots.forEach(h => {
-      md += `| #${h.rank} | ${h.severity.toUpperCase()} | ${h.category} | ${h.name} | ${h.metricDimension} | ${h.impactPct}% |\n`;
-    });
-    md += `\n## Detailed Issue Evidence & Diagnostics\n\n`;
-    hotspots.forEach(h => {
-      md += `### #${h.rank}: ${h.name}\n`;
-      md += `- **Severity**: ${h.severity.toUpperCase()}\n`;
-      md += `- **Category**: ${h.category}\n`;
-      md += `- **Impact**: ${h.impactPct}%\n`;
-      md += `- **Metric**: ${h.metricDimension}\n`;
-      md += `- **Breached Threshold**: ${h.thresholdBreached}\n`;
-      md += `- **Root Cause**: ${h.rootCause}\n`;
-      md += `- **AWR Section Evidence**: ${h.evidenceSummary} (${h.awrSourceSection})\n`;
-      if (h.perExecutionCost) {
-        md += `- **Per-Execution Cost**: ${h.perExecutionCost.elapsedPerExecMs || 'N/A'} elapsed, ${h.perExecutionCost.getsPerExec || 'N/A'} buffer gets\n`;
-      }
-      if (h.sqlText) {
-        md += `\n**Complete Statement Text (from Complete List of SQL Text):**\n\`\`\`sql\n${h.sqlText}\n\`\`\`\n`;
-      }
-      md += `**Live Oracle Diagnostic Command:**\n\`\`\`sql\n${h.diagnosticSql}\n\`\`\`\n\n`;
-    });
-    return md;
-  };
-
-  const getHotspotsExportData = (): ExportReportData => ({
-    reportDate: new Date().toISOString().split('T')[0],
-    activeReport,
-    selectedScenario,
-    phases: phases || [],
-    checklistItems: checklistItems || [],
-    hotspots,
-    completeSqlTexts
-  });
-
-  const handleDownloadMarkdown = () => {
-    exportToMarkdown(getHotspotsExportData(), 'AWR_Top20_Issues');
+    return generateTopIssuesSummaryMarkdown(hotspots, criticalCount, warningCount, attentionCount);
   };
 
   const handleCopyMarkdown = () => {
@@ -201,9 +159,22 @@ export const TopHotspotsNotificationCenter: React.FC<TopHotspotsNotificationCent
               </button>
             )}
 
+            {onNavigateToDiagnosticCommands && (
+              <button
+                onClick={onNavigateToDiagnosticCommands}
+                className="px-2.5 py-1 rounded text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer font-mono"
+                title="View Live Oracle Diagnostic Commands in dedicated tab"
+              >
+                <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                <span>Diagnostic Commands</span>
+              </button>
+            )}
+
+            {/* Copy Summary Button */}
             <button
               onClick={handleCopyMarkdown}
               className="px-2.5 py-1 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Copy Summary to clipboard (Markdown)"
             >
               {copiedFullExport ? (
                 <>
@@ -663,33 +634,22 @@ export const TopHotspotsNotificationCenter: React.FC<TopHotspotsNotificationCent
                   </div>
                 )}
 
-                {/* Live Oracle Diagnostic Command (No Speculative Tuning) */}
-                <div className="bg-slate-950 border border-slate-800 rounded overflow-hidden">
-                  <div className="px-3 py-1.5 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs text-slate-400">
-                    <span className="font-mono text-slate-300 flex items-center gap-1.5 text-[11px]">
-                      <Terminal className="w-3.5 h-3.5 text-amber-500" /> Live Oracle Diagnostic Command (Run in SQL*Plus / SQLcl)
+                {/* Dedicated Tab Link for Diagnostic Commands */}
+                {onNavigateToDiagnosticCommands && (
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-800/60 text-xs">
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      Category: {hotspot.category} · Threshold: {hotspot.thresholdBreached}
                     </span>
                     <button
-                      onClick={() => handleCopy(hotspot.id, hotspot.diagnosticSql)}
-                      className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors"
+                      onClick={onNavigateToDiagnosticCommands}
+                      className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:text-amber-300 hover:underline transition-colors cursor-pointer"
+                      title="View Live Oracle Diagnostic Command for this hotspot in dedicated tab"
                     >
-                      {copiedId === hotspot.id ? (
-                        <>
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          <span className="text-emerald-400">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>Copy Diagnostic SQL</span>
-                        </>
-                      )}
+                      <Terminal className="w-3.5 h-3.5" />
+                      <span>View Live Oracle Diagnostic Command in Commands Tab &rarr;</span>
                     </button>
                   </div>
-                  <pre className="p-3 text-xs font-mono text-amber-200/90 overflow-x-auto whitespace-pre leading-relaxed">
-                    {hotspot.diagnosticSql}
-                  </pre>
-                </div>
+                )}
               </div>
             );
           })

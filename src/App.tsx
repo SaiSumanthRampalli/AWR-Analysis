@@ -25,8 +25,9 @@ import {
   exportToPdf, 
   exportToMarkdown, 
   exportToCsv,
-  exportToJson 
+  exportToJson
 } from './utils/exportUtils';
+import { TopHotspotsDiagnosticCommands } from './components/TopHotspotsDiagnosticCommands';
 import { Upload, CheckCircle2 } from 'lucide-react';
 
 // Sample AWR Report for realistic demonstration on demand (SAN I/O Outage)
@@ -719,6 +720,16 @@ export default function App() {
             phases={phases}
             checklistItems={allChecklistItems}
             onOpenExportHub={() => setIsExportHubOpen(true)}
+            onNavigateToDiagnosticCommands={() => setActiveTab('commands')}
+          />
+        )}
+
+        {activeTab === 'commands' && (
+          <TopHotspotsDiagnosticCommands
+            hotspots={hotspots}
+            onNavigateToHotspots={() => setActiveTab('hotspots')}
+            onNavigateToUpload={() => setActiveTab('files')}
+            onLoadSampleAwr={handleLoadSampleAwr}
           />
         )}
 

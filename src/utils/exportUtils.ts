@@ -1835,3 +1835,1573 @@ export function exportToJson(data: ExportReportData, filenamePrefix = 'AWR_Diagn
 export function exportToPrintDossier() {
   window.print();
 }
+
+/**
+ * ============================================================================
+ * BEAUTIFIED EXECUTIVE SUMMARY ONLY EXPORT SUITE
+ * ============================================================================
+ * Provides streamlined, executive-ready diagnostic briefs across all formats
+ * focusing on KPI scorecards, critical alerts, root-cause findings, top issues,
+ * and strategic remediation roadmaps without raw SQL dumps or itemized checklists.
+ */
+
+/**
+ * Generates a beautified Executive Summary Markdown report
+ */
+export function generateSummaryMarkdown(data: ExportReportData): string {
+  const meta = resolveReportMetadata(data);
+  const date = data.reportDate || new Date().toISOString().split('T')[0];
+  const checklistItems = data.checklistItems;
+  const hotspots = data.hotspots;
+
+  const passCount = checklistItems.filter(i => i.status === 'pass').length;
+  const warnCount = checklistItems.filter(i => i.status === 'warning').length;
+  const critCount = checklistItems.filter(i => i.status === 'critical').length;
+  const naCount = checklistItems.filter(i => i.status === 'na').length;
+  const critHotspots = hotspots.filter(h => h.severity === 'critical');
+
+  let md = `# ORACLE DATABASE PERFORMANCE AUDIT: EXECUTIVE SUMMARY\n`;
+  md += `**Document Classification:** Executive Diagnostic Brief / Management Performance Review\n`;
+  md += `**Target Environment:** ${meta.dbName} (DBID: ${meta.dbId}) on ${meta.hostName}\n`;
+  md += `**Oracle Architecture:** ${meta.release} | ${meta.isRac ? `RAC Cluster (${meta.numNodes} Nodes)` : 'Single Instance'}\n`;
+  md += `**Hardware Inventory:** ${meta.cpuCores} Physical Cores (${meta.cpuThreads} Threads), ${meta.memoryGb}GB RAM\n`;
+  md += `**Snapshot Interval:** ${meta.snapRange} (${meta.elapsedMinutes} mins elapsed | ${meta.dbTimeMinutes} mins DB Time)\n`;
+  md += `**Audit Generation Date:** ${date}\n\n`;
+  md += `---\n\n`;
+
+  // 1. Executive Performance Alert
+  if (critCount > 0 || critHotspots.length > 0 || meta.coreSaturationPct > 100) {
+    md += `> ⚠️ **HIGH-SEVERITY EXECUTIVE ALERT:** Active performance bottlenecks identified requiring prioritized intervention. `;
+    md += `Core saturation is at **${meta.coreSaturationPct}%** (${meta.aas} AAS vs ${meta.cpuCores} physical cores). `;
+    md += `Identified **${critCount} critical runbook threshold breaches** and **${critHotspots.length} high-severity workload bottlenecks**.\n\n`;
+  } else {
+    md += `> ℹ️ **SYSTEM HEALTH OVERVIEW:** Overall system workload is operating within nominal parameters with ${passCount} healthy verification checks.\n\n`;
+  }
+
+  // 2. Executive KPI & Health Scorecard
+  md += `## 1. Executive Diagnostic Scorecard & Workload Health\n\n`;
+  md += `| Core Performance Indicator | Observed Metric | Engineering Standard / SLA | Health Status |\n`;
+  md += `|:---|:---|:---|:---|\n`;
+  md += `| **Average Active Sessions (AAS)** | **${meta.aas} AAS** | < ${meta.cpuCores} Physical Cores | ${meta.aas > meta.cpuCores ? '🔴 CPU Starvation' : meta.coreSaturationPct > 75 ? '🟡 Elevated' : '🟢 Nominal'} |\n`;
+  md += `| **Core Saturation Ratio** | **${meta.coreSaturationPct}%** | < 75% for headroom | ${meta.coreSaturationPct > 100 ? '🔴 Overloaded' : meta.coreSaturationPct > 75 ? '🟡 Warning' : '🟢 Healthy'} |\n`;
+  md += `| **Host I/O Wait (%WIO)** | **${meta.wioCpu}%** | < 15% Max Tolerable | ${meta.wioCpu > 15 ? '🔴 Storage Latency Stall' : meta.wioCpu > 8 ? '🟡 Sub-optimal' : '🟢 Nominal'} |\n`;
+  md += `| **Host CPU Utilization** | User: ${meta.userCpu}% \| Sys: ${meta.sysCpu}% | Balanced process distribution | 🟢 Monitored |\n`;
+  md += `| **Buffer Cache Hit Ratio** | **${meta.bufferHit}%** | > 95% Production SLA | ${meta.bufferHit < 95 ? '🟡 Cache Churn' : '🟢 Optimal'} |\n`;
+  md += `| **PGA Workarea Hit Ratio** | **${meta.pgaHit}%** | > 90% (Prevent TEMP spill) | ${meta.pgaHit < 90 ? '🔴 Hash/Sort TEMP Spilling' : '🟢 Optimal'} |\n`;
+  md += `| **Hard Parse Frequency** | **${meta.hardParsePct}%** (${meta.parseCallsPerSec.toLocaleString()}/s) | < 3% of Total Parses | ${meta.hardParsePct > 5 ? '🔴 Parse Storm / Shared Pool' : '🟢 Optimal'} |\n`;
+  md += `| **I/O Throughput Velocity** | ${meta.logicalReadsPerSec.toLocaleString()} logical/s \| ${meta.physicalReadsPerSec.toLocaleString()} phys/s | Buffer Gets vs Disk Blocks | 🟢 Active |\n`;
+  md += `| **Redo Generation Rate** | **${meta.redoMbPerSec} MB/s** | LGWR latency baseline | 🟢 Active |\n`;
+  md += `| **Transaction Velocity** | ${meta.executionsPerSec.toLocaleString()} exec/s \| ${meta.transactionsPerSec.toLocaleString()} tx/s | Application Workload Rate | 🟢 Active |\n\n`;
+
+  // 3. Key Forensic Findings
+  if (meta.keyFindings.length > 0) {
+    md += `## 2. Key Forensic Findings & Root Cause Analysis\n\n`;
+    meta.keyFindings.forEach((finding, idx) => {
+      md += `${idx + 1}. **${finding}**\n`;
+    });
+    md += `\n`;
+  }
+
+  // 4. Top Workload Bottlenecks
+  if (hotspots.length > 0) {
+    md += `## 3. Top Workload Bottlenecks & Impact Ranking\n\n`;
+    md += `| Rank | Severity | Bottleneck Name | Category | Impact (% DB Time) | Primary Root Cause |\n`;
+    md += `|:---:|:---:|:---|:---|:---:|:---|\n`;
+    hotspots.slice(0, 10).forEach(h => {
+      const sevIcon = h.severity === 'critical' ? '🔴 CRITICAL' : h.severity === 'warning' ? '🟡 WARNING' : '🔵 ATTENTION';
+      md += `| #${h.rank} | ${sevIcon} | **${h.name}** | ${h.category} | **${h.impactPct}%** | ${h.rootCause} |\n`;
+    });
+    md += `\n`;
+
+    md += `### Detailed Issue Evidence & Diagnostics\n\n`;
+    hotspots.slice(0, 10).forEach(h => {
+      md += `#### #${h.rank}: ${h.name}\n`;
+      md += `- **Severity**: ${h.severity.toUpperCase()} | **Category**: ${h.category} | **Impact**: ${h.impactPct}%\n`;
+      md += `- **Metric**: ${h.metricDimension} | **Breached Threshold**: ${h.thresholdBreached}\n`;
+      md += `- **Root Cause**: ${h.rootCause}\n`;
+      md += `- **AWR Section Evidence**: ${h.evidenceSummary} (${h.awrSourceSection})\n`;
+      if (h.perExecutionCost) {
+        md += `- **Per-Execution Cost**: ${h.perExecutionCost.elapsedPerExecMs || 'N/A'} elapsed, ${h.perExecutionCost.getsPerExec || 'N/A'} buffer gets\n`;
+      }
+      if (h.sqlText) {
+        md += `\n**Complete Statement Text (from Complete List of SQL Text):**\n\`\`\`sql\n${h.sqlText}\n\`\`\`\n`;
+      }
+      md += `**Live Oracle Diagnostic Command:**\n\`\`\`sql\n${h.diagnosticSql}\n\`\`\`\n\n`;
+    });
+  }
+
+  // 5. Verification Phase Health Summary
+  md += `## 4. 8-Phase Diagnostic Verification Health Summary\n\n`;
+  md += `| Phase # | Diagnostic Phase Focus | Rules Evaluated | Pass | Warning | Critical | Health Status |\n`;
+  md += `|:---:|:---|:---:|:---:|:---:|:---:|:---|\n`;
+  data.phases.forEach(phase => {
+    const pPass = phase.items.filter(i => i.status === 'pass').length;
+    const pWarn = phase.items.filter(i => i.status === 'warning').length;
+    const pCrit = phase.items.filter(i => i.status === 'critical').length;
+    const statusLabel = pCrit > 0 ? '🔴 Breached' : pWarn > 0 ? '🟡 Warning' : '🟢 Nominal';
+    md += `| Phase ${phase.number} | **${phase.title}** | ${phase.items.length} | ${pPass} | ${pWarn} | ${pCrit} | ${statusLabel} |\n`;
+  });
+  md += `\n`;
+
+  // 6. Strategic Remediation Roadmap
+  md += `## 5. Strategic Remediation Roadmap & Recommended Action Plan\n\n`;
+  if (meta.suggestedAction) {
+    md += `**Primary Recommendation:**\n${meta.suggestedAction}\n\n`;
+  }
+  md += `### Implementation Priority Checklist:\n`;
+  md += `- **[P1 Immediate]:** Address top critical wait events and high-impact SQL plan regressions identified in Section 3.\n`;
+  md += `- **[P2 Short-Term]:** Validate memory sizing advisories (SGA/PGA cache pools) to eliminate disk TEMP spills.\n`;
+  md += `- **[P3 Preventive]:** Enforce bind variable standards to mitigate shared pool hard parse storms and library cache mutexes.\n\n`;
+
+  // 7. Audit Verification Sign-Off
+  md += `---\n\n`;
+  md += `### Audit Sign-Off & Verification\n`;
+  md += `- **Diagnostic Analyst:** Automated Oracle AWR Diagnostics Workbench\n`;
+  md += `- **Target Database:** ${meta.dbName} (${meta.hostName})\n`;
+  md += `- **Audit Conclusion:** ${critCount === 0 ? 'Workload operating within SLA parameters.' : 'Targeted remediation required as prioritized above.'}\n`;
+  md += `- **Confidentiality:** Strictly internal enterprise technical review.\n`;
+
+  return md;
+}
+
+/**
+ * Exports Beautified Executive Summary to Markdown (.md)
+ */
+export function exportSummaryToMarkdown(data: ExportReportData, filenamePrefix = 'AWR_Executive_Summary') {
+  const md = generateSummaryMarkdown(data);
+  const date = data.reportDate || new Date().toISOString().split('T')[0];
+  downloadFile(md, `${filenamePrefix}_${date}.md`, 'text/markdown;charset=utf-8');
+}
+
+/**
+ * Exports Beautified Executive Summary to Structured CSV (.csv)
+ */
+export function exportSummaryToCsv(data: ExportReportData, filenamePrefix = 'AWR_Executive_Summary') {
+  const meta = resolveReportMetadata(data);
+  const date = data.reportDate || new Date().toISOString().split('T')[0];
+
+  const escapeCsv = (str: string | number | undefined | null) => {
+    if (str === undefined || str === null) return '""';
+    const s = String(str).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows: string[] = [];
+
+  // Section 1: Executive KPI Scorecard
+  rows.push('"--- ORACLE PERFORMANCE AUDIT: EXECUTIVE SUMMARY ---"');
+  rows.push(['Metric / Parameter', 'Observed Value', 'SLA Standard', 'Health Status'].map(escapeCsv).join(','));
+  rows.push(['Database Name', meta.dbName, 'Primary Target', 'Active'].map(escapeCsv).join(','));
+  rows.push(['Database ID (DBID)', meta.dbId, 'Target ID', 'Active'].map(escapeCsv).join(','));
+  rows.push(['Host Server', meta.hostName, meta.isRac ? `RAC (${meta.numNodes} Nodes)` : 'Single Instance', 'Monitored'].map(escapeCsv).join(','));
+  rows.push(['Oracle Release', meta.release, 'Enterprise Edition', 'Active'].map(escapeCsv).join(','));
+  rows.push(['Average Active Sessions (AAS)', meta.aas, `< ${meta.cpuCores} Cores`, meta.aas > meta.cpuCores ? 'CRITICAL CPU STARVATION' : 'NOMINAL'].map(escapeCsv).join(','));
+  rows.push(['Core Saturation Ratio', `${meta.coreSaturationPct}%`, '< 75% Headroom', meta.coreSaturationPct > 100 ? 'OVERLOAD' : 'NOMINAL'].map(escapeCsv).join(','));
+  rows.push(['Host Wait I/O % (%WIO)', `${meta.wioCpu}%`, '< 15% Max Tolerable', meta.wioCpu > 15 ? 'CRITICAL STORAGE LAG' : 'NOMINAL'].map(escapeCsv).join(','));
+  rows.push(['Buffer Cache Hit %', `${meta.bufferHit}%`, '> 95% SLA', meta.bufferHit < 95 ? 'WARNING' : 'NOMINAL'].map(escapeCsv).join(','));
+  rows.push(['PGA Workarea Hit %', `${meta.pgaHit}%`, '> 90% SLA', meta.pgaHit < 90 ? 'CRITICAL TEMP SPILL' : 'NOMINAL'].map(escapeCsv).join(','));
+  rows.push(['Hard Parse %', `${meta.hardParsePct}%`, '< 3% SLA', meta.hardParsePct > 5 ? 'PARSE STORM' : 'NOMINAL'].map(escapeCsv).join(','));
+  rows.push(['Logical Reads / sec', meta.logicalReadsPerSec, 'Buffer Gets', 'Active'].map(escapeCsv).join(','));
+  rows.push(['Physical Reads / sec', meta.physicalReadsPerSec, 'Storage IOPS', 'Active'].map(escapeCsv).join(','));
+  rows.push(['Redo Generation Rate', `${meta.redoMbPerSec} MB/s`, 'LGWR Throughput', 'Active'].map(escapeCsv).join(','));
+
+  // Section 2: Key Findings
+  rows.push('');
+  rows.push('"--- FORENSIC KEY FINDINGS ---"');
+  rows.push(['Finding #', 'Observation & Analysis'].map(escapeCsv).join(','));
+  meta.keyFindings.forEach((kf, idx) => {
+    rows.push([`Finding ${idx + 1}`, kf].map(escapeCsv).join(','));
+  });
+
+  // Section 3: Top Bottlenecks
+  rows.push('');
+  rows.push('"--- TOP WORKLOAD BOTTLENECKS ---"');
+  rows.push(['Rank', 'Severity', 'Bottleneck Name', 'Category', 'Impact % DB Time', 'Primary Root Cause'].map(escapeCsv).join(','));
+  data.hotspots.slice(0, 10).forEach(h => {
+    rows.push([
+      `#${h.rank}`,
+      h.severity.toUpperCase(),
+      h.name,
+      h.category,
+      `${h.impactPct}%`,
+      h.rootCause
+    ].map(escapeCsv).join(','));
+  });
+
+  // Section 4: Phase Health Summary
+  rows.push('');
+  rows.push('"--- 8-PHASE RUNBOOK HEALTH MATRIX ---"');
+  rows.push(['Phase #', 'Phase Focus Title', 'Total Rules', 'Pass', 'Warning', 'Critical', 'Overall Status'].map(escapeCsv).join(','));
+  data.phases.forEach(p => {
+    const pass = p.items.filter(i => i.status === 'pass').length;
+    const warn = p.items.filter(i => i.status === 'warning').length;
+    const crit = p.items.filter(i => i.status === 'critical').length;
+    const st = crit > 0 ? 'CRITICAL' : warn > 0 ? 'WARNING' : 'NOMINAL';
+    rows.push([`Phase ${p.number}`, p.title, p.items.length, pass, warn, crit, st].map(escapeCsv).join(','));
+  });
+
+  // Section 5: Remediation Action Plan
+  if (meta.suggestedAction) {
+    rows.push('');
+    rows.push('"--- RECOMMENDED REMEDIATION ROADMAP ---"');
+    rows.push(['Strategic Action Plan', meta.suggestedAction].map(escapeCsv).join(','));
+  }
+
+  const csvContent = rows.join('\r\n');
+  downloadFile(csvContent, `${filenamePrefix}_${date}.csv`, 'text/csv;charset=utf-8');
+}
+
+/**
+ * Exports Beautified Executive Summary to Microsoft Excel XML Spreadsheet (.xls)
+ * Creates a clean, styled 2-tab executive workbook with KPI scorecards and top issues.
+ */
+export function exportSummaryToExcel(data: ExportReportData, filenamePrefix = 'AWR_Executive_Summary') {
+  const meta = resolveReportMetadata(data);
+  const date = data.reportDate || new Date().toISOString().split('T')[0];
+  const checklistItems = data.checklistItems;
+  const hotspots = data.hotspots;
+
+  const passCount = checklistItems.filter(i => i.status === 'pass').length;
+  const warnCount = checklistItems.filter(i => i.status === 'warning').length;
+  const critCount = checklistItems.filter(i => i.status === 'critical').length;
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Title>Oracle AWR Performance: Executive Summary</Title>
+  <Author>Oracle Performance Diagnostic Workbench</Author>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Borders/>
+   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#1E293B"/>
+  </Style>
+  <Style ss:ID="TitleStyle">
+   <Font ss:FontName="Segoe UI" ss:Size="14" ss:Color="#0F172A" ss:Bold="1"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="SubtitleStyle">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#475569" ss:Italic="1"/>
+  </Style>
+  <Style ss:ID="HeaderStyle">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>
+   <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#334155"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#334155"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#334155"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#334155"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="SectionHeader">
+   <Font ss:FontName="Segoe UI" ss:Size="11" ss:Color="#0F172A" ss:Bold="1"/>
+   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="CellBold">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#0F172A" ss:Bold="1"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="CellNormal">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#334155"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="BadgeCrit">
+   <Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#9F1239" ss:Bold="1"/>
+   <Interior ss:Color="#FFE4E6" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="BadgeWarn">
+   <Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#92400E" ss:Bold="1"/>
+   <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="BadgePass">
+   <Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#065F46" ss:Bold="1"/>
+   <Interior ss:Color="#D1FAE5" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+ </Styles>
+
+ <!-- TAB 1: Executive KPI Dashboard -->
+ <Worksheet ss:Name="Executive Dashboard">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="200"/>
+   <Column ss:Width="160"/>
+   <Column ss:Width="180"/>
+   <Column ss:Width="140"/>
+
+   <Row ss:Height="26">
+    <Cell ss:MergeAcross="3" ss:StyleID="TitleStyle">
+     <Data ss:Type="String">ORACLE DATABASE PERFORMANCE: EXECUTIVE BRIEF</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="18">
+    <Cell ss:MergeAcross="3" ss:StyleID="SubtitleStyle">
+     <Data ss:Type="String">Target DB: ${escapeXml(meta.dbName)} (DBID: ${escapeXml(meta.dbId)}) on ${escapeXml(meta.hostName)} | Generated: ${date} | Snapshot: ${escapeXml(meta.snapRange)}</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="10"/>
+
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="3" ss:StyleID="SectionHeader"><Data ss:Type="String">1. Executive Diagnostic Scorecard</Data></Cell>
+   </Row>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Key Performance Dimension</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Observed Telemetry</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Engineering SLA Reference</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Diagnostic Health Status</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Average Active Sessions (AAS)</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.aas} Active Sessions</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">&lt; ${meta.cpuCores} Physical Cores</Data></Cell>
+    <Cell ss:StyleID="${meta.aas > meta.cpuCores ? 'BadgeCrit' : 'BadgePass'}"><Data ss:Type="String">${meta.aas > meta.cpuCores ? 'CPU STARVATION' : 'NOMINAL'}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Core Saturation Ratio</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.coreSaturationPct}%</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">&lt; 75% Capacity Headroom</Data></Cell>
+    <Cell ss:StyleID="${meta.coreSaturationPct > 100 ? 'BadgeCrit' : meta.coreSaturationPct > 75 ? 'BadgeWarn' : 'BadgePass'}"><Data ss:Type="String">${meta.coreSaturationPct > 100 ? 'CRITICAL LOAD' : meta.coreSaturationPct > 75 ? 'ELEVATED' : 'HEALTHY'}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Host I/O Wait (%WIO)</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.wioCpu}%</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">&lt; 15% Maximum Tolerable</Data></Cell>
+    <Cell ss:StyleID="${meta.wioCpu > 15 ? 'BadgeCrit' : meta.wioCpu > 8 ? 'BadgeWarn' : 'BadgePass'}"><Data ss:Type="String">${meta.wioCpu > 15 ? 'STORAGE BOTTLENECK' : meta.wioCpu > 8 ? 'WARNING' : 'NOMINAL'}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Buffer Cache Hit %</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.bufferHit}%</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">&gt; 95% Production Target</Data></Cell>
+    <Cell ss:StyleID="${meta.bufferHit < 95 ? 'BadgeWarn' : 'BadgePass'}"><Data ss:Type="String">${meta.bufferHit < 95 ? 'SUB-OPTIMAL' : 'NOMINAL'}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">PGA Workarea Hit %</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.pgaHit}%</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">&gt; 90% (Avoid TEMP Spills)</Data></Cell>
+    <Cell ss:StyleID="${meta.pgaHit < 90 ? 'BadgeCrit' : 'BadgePass'}"><Data ss:Type="String">${meta.pgaHit < 90 ? 'TEMP DISK SPILLING' : 'NOMINAL'}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Hard Parse Frequency</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.hardParsePct}% (${meta.parseCallsPerSec.toLocaleString()}/s)</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">&lt; 3% Optimal Bound</Data></Cell>
+    <Cell ss:StyleID="${meta.hardParsePct > 5 ? 'BadgeCrit' : 'BadgePass'}"><Data ss:Type="String">${meta.hardParsePct > 5 ? 'PARSE STORM' : 'NOMINAL'}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Workload Elapsed vs DB Time</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.elapsedMinutes}m Elapsed / ${meta.dbTimeMinutes}m DB Time</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Snapshot Window</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">AAS Factor: ${meta.aas}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">I/O Throughput Velocity</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${meta.logicalReadsPerSec.toLocaleString()} log/s | ${meta.physicalReadsPerSec.toLocaleString()} phys/s</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Logical Gets vs Storage Reads</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${meta.redoMbPerSec} MB/s Redo</Data></Cell>
+   </Row>
+   <Row ss:Height="12"/>
+
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="3" ss:StyleID="SectionHeader"><Data ss:Type="String">2. Primary Forensic Findings & Root Cause Analysis</Data></Cell>
+   </Row>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Item</Data></Cell>
+    <Cell ss:MergeAcross="2" ss:StyleID="HeaderStyle"><Data ss:Type="String">Forensic Observation & Diagnostic Finding</Data></Cell>
+   </Row>`;
+
+  meta.keyFindings.forEach((kf, idx) => {
+    xml += `
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Finding ${idx + 1}</Data></Cell>
+    <Cell ss:MergeAcross="2" ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(kf)}</Data></Cell>
+   </Row>`;
+  });
+
+  if (meta.suggestedAction) {
+    xml += `
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">Action Plan</Data></Cell>
+    <Cell ss:MergeAcross="2" ss:StyleID="CellBold"><Data ss:Type="String">${escapeXml(meta.suggestedAction)}</Data></Cell>
+   </Row>`;
+  }
+
+  xml += `
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <DisplayGridlines/>
+  </WorksheetOptions>
+ </Worksheet>
+
+ <!-- TAB 2: Bottlenecks & Health Matrix -->
+ <Worksheet ss:Name="Bottlenecks & Health">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="60"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="180"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="90"/>
+   <Column ss:Width="300"/>
+
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">Top Ranked Workload Bottlenecks</Data></Cell>
+   </Row>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Rank</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Severity</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Bottleneck Name</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Category</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Impact</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Root Cause Assessment</Data></Cell>
+   </Row>`;
+
+  hotspots.slice(0, 10).forEach(h => {
+    const sevStyle = h.severity === 'critical' ? 'BadgeCrit' : h.severity === 'warning' ? 'BadgeWarn' : 'CellNormal';
+    xml += `
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">#${h.rank}</Data></Cell>
+    <Cell ss:StyleID="${sevStyle}"><Data ss:Type="String">${escapeXml(h.severity.toUpperCase())}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${escapeXml(h.name)}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(h.category)}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${h.impactPct}%</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(h.rootCause)}</Data></Cell>
+   </Row>`;
+  });
+
+  xml += `
+   <Row ss:Height="14"/>
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">8-Phase Systematic Runbook Verification Scorecard</Data></Cell>
+   </Row>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Phase</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="HeaderStyle"><Data ss:Type="String">Phase Title</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Rules</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Pass / Warn / Crit</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Health Indicator</Data></Cell>
+   </Row>`;
+
+  data.phases.forEach(p => {
+    const pPass = p.items.filter(i => i.status === 'pass').length;
+    const pWarn = p.items.filter(i => i.status === 'warning').length;
+    const pCrit = p.items.filter(i => i.status === 'critical').length;
+    const stStyle = pCrit > 0 ? 'BadgeCrit' : pWarn > 0 ? 'BadgeWarn' : 'BadgePass';
+    const stText = pCrit > 0 ? 'BREACHED' : pWarn > 0 ? 'WARNING' : 'HEALTHY';
+    xml += `
+   <Row>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">P${p.number}</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(p.title)}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="Number">${p.items.length}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${pPass} / ${pWarn} / ${pCrit}</Data></Cell>
+    <Cell ss:StyleID="${stStyle}"><Data ss:Type="String">${stText}</Data></Cell>
+   </Row>`;
+  });
+
+  xml += `
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <DisplayGridlines/>
+  </WorksheetOptions>
+ </Worksheet>
+</Workbook>`;
+
+  downloadFile(xml, `${filenamePrefix}_${date}.xls`, 'application/vnd.ms-excel;charset=utf-8');
+}
+
+/**
+ * Exports Beautified Executive Summary to Microsoft Word (.doc)
+ * Clean executive briefing document with styled KPI cards, alert callouts, and recommendations.
+ */
+export function exportSummaryToWord(data: ExportReportData, filenamePrefix = 'AWR_Executive_Summary') {
+  const meta = resolveReportMetadata(data);
+  const date = data.reportDate || new Date().toISOString().split('T')[0];
+  const checklistItems = data.checklistItems;
+  const hotspots = data.hotspots;
+
+  const critHotspots = hotspots.filter(h => h.severity === 'critical');
+  const critChecks = checklistItems.filter(i => i.status === 'critical');
+
+  let doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!--[if gte mso 9]><xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+<w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml><![endif]-->
+<style>
+  @page {
+    size: 8.5in 11in;
+    margin: 0.75in 0.75in 0.75in 0.75in;
+  }
+  body {
+    font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    color: #1e293b;
+  }
+  .doc-header {
+    border-bottom: 3pt solid #0f172a;
+    padding-bottom: 6pt;
+    margin-bottom: 12pt;
+  }
+  h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #0f172a;
+    margin: 0 0 4pt 0;
+  }
+  .subtitle {
+    font-size: 9.5pt;
+    color: #475569;
+    margin: 0;
+  }
+  h2 {
+    font-size: 12.5pt;
+    font-weight: bold;
+    color: #0f172a;
+    border-bottom: 1.5pt solid #cbd5e1;
+    padding-bottom: 3pt;
+    margin-top: 16pt;
+    margin-bottom: 6pt;
+    page-break-after: avoid;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 12pt;
+  }
+  th {
+    background-color: #0f172a;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 9pt;
+    border: 1pt solid #334155;
+    padding: 6pt 8pt;
+    text-align: left;
+  }
+  td {
+    border: 1pt solid #cbd5e1;
+    padding: 5pt 7pt;
+    font-size: 9pt;
+    vertical-align: top;
+  }
+  .alert-box {
+    background-color: #fff1f2;
+    border-left: 4pt solid #e11d48;
+    padding: 8pt 12pt;
+    margin-bottom: 12pt;
+    font-size: 9.5pt;
+    color: #881337;
+  }
+  .roadmap-box {
+    background-color: #f0fdf4;
+    border-left: 4pt solid #16a34a;
+    padding: 8pt 12pt;
+    margin-bottom: 12pt;
+    font-size: 9.5pt;
+    color: #14532d;
+  }
+  .badge-crit { background-color: #ffe4e6; color: #9f1239; font-weight: bold; padding: 2pt 4pt; }
+  .badge-warn { background-color: #fef3c7; color: #92400e; font-weight: bold; padding: 2pt 4pt; }
+  .badge-pass { background-color: #d1fae5; color: #065f46; font-weight: bold; padding: 2pt 4pt; }
+  .sign-off-block {
+    margin-top: 20pt;
+    border-top: 1pt solid #cbd5e1;
+    padding-top: 8pt;
+    font-size: 8.5pt;
+    color: #64748b;
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <h1>ORACLE DATABASE PERFORMANCE AUDIT: EXECUTIVE SUMMARY</h1>
+  <p class="subtitle">
+    <strong>Classification:</strong> Confidential Management Briefing | <strong>Target Database:</strong> ${escapeXml(meta.dbName)} (DBID: ${escapeXml(meta.dbId)}) on ${escapeXml(meta.hostName)}<br>
+    <strong>Oracle Architecture:</strong> ${escapeXml(meta.release)} · ${meta.isRac ? `RAC Cluster (${meta.numNodes} Nodes)` : 'Single Instance'} | <strong>Audit Date:</strong> ${date} | <strong>Snapshot:</strong> ${escapeXml(meta.snapRange)}
+  </p>
+</div>
+
+${(critChecks.length > 0 || critHotspots.length > 0 || meta.coreSaturationPct > 100) ? `
+<div class="alert-box">
+  <strong>HIGH-SEVERITY EXECUTIVE ALERT:</strong> Identified ${critChecks.length} critical checklist breaches and ${critHotspots.length} high-severity workload bottlenecks. Active CPU Core Saturation is at <strong>${meta.coreSaturationPct}%</strong> (${meta.aas} AAS vs ${meta.cpuCores} physical cores). Immediate prioritized triage recommended.
+</div>` : ''}
+
+<h2>1. Executive Diagnostic Scorecard & Telemetry Health</h2>
+<table>
+  <tr>
+    <th style="width: 30%;">Performance Metric</th>
+    <th style="width: 25%;">Observed Telemetry</th>
+    <th style="width: 25%;">Engineering Reference / SLA</th>
+    <th style="width: 20%;">Health Status</th>
+  </tr>
+  <tr>
+    <td><strong>Average Active Sessions (AAS)</strong></td>
+    <td><strong>${meta.aas}</strong> active sessions</td>
+    <td>&lt; ${meta.cpuCores} Physical CPU Cores</td>
+    <td><span class="${meta.aas > meta.cpuCores ? 'badge-crit' : 'badge-pass'}">${meta.aas > meta.cpuCores ? 'CPU STARVATION' : 'NOMINAL'}</span></td>
+  </tr>
+  <tr>
+    <td><strong>Core Saturation Ratio</strong></td>
+    <td><strong>${meta.coreSaturationPct}%</strong> load</td>
+    <td>&lt; 75% Capacity Headroom</td>
+    <td><span class="${meta.coreSaturationPct > 100 ? 'badge-crit' : meta.coreSaturationPct > 75 ? 'badge-warn' : 'badge-pass'}">${meta.coreSaturationPct > 100 ? 'OVERLOAD' : meta.coreSaturationPct > 75 ? 'ELEVATED' : 'HEALTHY'}</span></td>
+  </tr>
+  <tr>
+    <td><strong>Host I/O Wait (%WIO)</strong></td>
+    <td><strong>${meta.wioCpu}%</strong> I/O wait</td>
+    <td>&lt; 15% Max Tolerable</td>
+    <td><span class="${meta.wioCpu > 15 ? 'badge-crit' : meta.wioCpu > 8 ? 'badge-warn' : 'badge-pass'}">${meta.wioCpu > 15 ? 'STORAGE BOTTLENECK' : 'NOMINAL'}</span></td>
+  </tr>
+  <tr>
+    <td><strong>Buffer Cache Hit Ratio</strong></td>
+    <td><strong>${meta.bufferHit}%</strong></td>
+    <td>&gt; 95% Production Target</td>
+    <td><span class="${meta.bufferHit < 95 ? 'badge-warn' : 'badge-pass'}">${meta.bufferHit < 95 ? 'WARNING' : 'NOMINAL'}</span></td>
+  </tr>
+  <tr>
+    <td><strong>PGA Workarea Hit Ratio</strong></td>
+    <td><strong>${meta.pgaHit}%</strong></td>
+    <td>&gt; 90% (Prevent TEMP Thrash)</td>
+    <td><span class="${meta.pgaHit < 90 ? 'badge-crit' : 'badge-pass'}">${meta.pgaHit < 90 ? 'TEMP DISK SPILLING' : 'NOMINAL'}</span></td>
+  </tr>
+  <tr>
+    <td><strong>Hard Parse Ratio</strong></td>
+    <td><strong>${meta.hardParsePct}%</strong> (${meta.parseCallsPerSec.toLocaleString()}/s)</td>
+    <td>&lt; 3% Optimal Bound</td>
+    <td><span class="${meta.hardParsePct > 5 ? 'badge-crit' : 'badge-pass'}">${meta.hardParsePct > 5 ? 'PARSE STORM' : 'NOMINAL'}</span></td>
+  </tr>
+  <tr>
+    <td><strong>Throughput Velocity</strong></td>
+    <td>${meta.executionsPerSec.toLocaleString()} exec/s | ${meta.transactionsPerSec.toLocaleString()} tx/s</td>
+    <td>Workload Rate</td>
+    <td>Active Monitored</td>
+  </tr>
+  <tr>
+    <td><strong>I/O & Redo Throughput</strong></td>
+    <td>${meta.logicalReadsPerSec.toLocaleString()} log/s | ${meta.physicalReadsPerSec.toLocaleString()} phys/s</td>
+    <td>${meta.redoMbPerSec} MB/s Redo Velocity</td>
+    <td>Active Monitored</td>
+  </tr>
+</table>
+
+<h2>2. Key Forensic Findings & Root Cause Analysis</h2>
+<table>
+  <tr><th style="width: 12%;">Finding</th><th>Observation & Diagnostic Root Cause</th></tr>`;
+
+  meta.keyFindings.forEach((kf, idx) => {
+    doc += `<tr><td><strong>#${idx + 1}</strong></td><td>${escapeXml(kf)}</td></tr>`;
+  });
+
+  doc += `
+</table>
+
+<h2>3. Top Ranked Workload Bottlenecks</h2>
+<table>
+  <tr>
+    <th style="width: 8%;">Rank</th>
+    <th style="width: 12%;">Severity</th>
+    <th style="width: 28%;">Bottleneck Name</th>
+    <th style="width: 14%;">Category</th>
+    <th style="width: 10%;">Impact</th>
+    <th style="width: 28%;">Root Cause Assessment</th>
+  </tr>`;
+
+  hotspots.slice(0, 8).forEach(h => {
+    const sevClass = h.severity === 'critical' ? 'badge-crit' : h.severity === 'warning' ? 'badge-warn' : 'badge-pass';
+    doc += `
+  <tr>
+    <td><strong>#${h.rank}</strong></td>
+    <td><span class="${sevClass}">${escapeXml(h.severity.toUpperCase())}</span></td>
+    <td><strong>${escapeXml(h.name)}</strong></td>
+    <td>${escapeXml(h.category)}</td>
+    <td><strong>${h.impactPct}%</strong></td>
+    <td>${escapeXml(h.rootCause)}</td>
+  </tr>`;
+  });
+
+  doc += `
+</table>
+
+<h2>4. 8-Phase Verification Health Summary</h2>
+<table>
+  <tr>
+    <th style="width: 12%;">Phase</th>
+    <th style="width: 40%;">Diagnostic Focus Area</th>
+    <th style="width: 14%;">Rules Evaluated</th>
+    <th style="width: 18%;">Pass / Warn / Crit</th>
+    <th style="width: 16%;">Status</th>
+  </tr>`;
+
+  data.phases.forEach(p => {
+    const pPass = p.items.filter(i => i.status === 'pass').length;
+    const pWarn = p.items.filter(i => i.status === 'warning').length;
+    const pCrit = p.items.filter(i => i.status === 'critical').length;
+    const stClass = pCrit > 0 ? 'badge-crit' : pWarn > 0 ? 'badge-warn' : 'badge-pass';
+    const stText = pCrit > 0 ? 'BREACHED' : pWarn > 0 ? 'WARNING' : 'NOMINAL';
+    doc += `
+  <tr>
+    <td><strong>P${p.number}</strong></td>
+    <td>${escapeXml(p.title)}</td>
+    <td>${p.items.length}</td>
+    <td>${pPass} / ${pWarn} / ${pCrit}</td>
+    <td><span class="${stClass}">${stText}</span></td>
+  </tr>`;
+  });
+
+  doc += `
+</table>
+
+<h2>5. Strategic Remediation Roadmap</h2>
+${meta.suggestedAction ? `
+<div class="roadmap-box">
+  <strong>RECOMMENDED DBA ACTION PLAN:</strong><br>
+  ${escapeXml(meta.suggestedAction)}
+</div>` : ''}
+
+<div class="sign-off-block">
+  <strong>Audit Authority:</strong> Oracle Performance Diagnostic Workbench · Target: ${escapeXml(meta.dbName)} (${escapeXml(meta.hostName)}) · Confidential Enterprise Briefing
+</div>
+
+</body>
+</html>`;
+
+  downloadFile(doc, `${filenamePrefix}_${date}.doc`, 'application/msword;charset=utf-8');
+}
+
+/**
+ * Exports Beautified Executive Summary to Print-Ready PDF (.pdf)
+ * High-impact corporate executive brief formatted across 1-2 pages with colored KPI scorecards.
+ */
+export function exportSummaryToPdf(data: ExportReportData, filenamePrefix = 'AWR_Executive_Summary') {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'letter'
+    });
+
+    const meta = resolveReportMetadata(data);
+    const date = data.reportDate || new Date().toISOString().split('T')[0];
+    const checklistItems = data.checklistItems;
+    const hotspots = data.hotspots;
+
+    const passCount = checklistItems.filter(i => i.status === 'pass').length;
+    const warnCount = checklistItems.filter(i => i.status === 'warning').length;
+    const critCount = checklistItems.filter(i => i.status === 'critical').length;
+
+    // Helper for page break
+    const ensureSpace = (neededHeight: number, currentY: number): number => {
+      if (currentY + neededHeight > 730) {
+        doc.addPage();
+        return 48;
+      }
+      return currentY;
+    };
+
+    // Header Banner
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 612, 64, 'F');
+
+    // Amber accent bar
+    doc.setFillColor(245, 158, 11); // amber-500
+    doc.rect(0, 62, 612, 2.5, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('ORACLE PERFORMANCE AUDIT: EXECUTIVE SUMMARY', 36, 26);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225);
+    doc.text(`Target DB: ${meta.dbName} (DBID: ${meta.dbId}) | Host: ${meta.hostName} | Release: ${meta.release}`, 36, 42);
+    doc.text(`Generated: ${date} | Snapshot: ${meta.snapRange} | ${meta.isRac ? `RAC (${meta.numNodes} Nodes)` : 'Single Instance'}`, 36, 53);
+
+    // Right-aligned executive pill
+    doc.setFillColor(30, 41, 59);
+    doc.roundedRect(440, 16, 136, 32, 3, 3, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(245, 158, 11);
+    doc.text('EXECUTIVE BRIEF', 448, 28);
+    doc.setFontSize(7);
+    doc.setTextColor(226, 232, 240);
+    doc.text(`AAS: ${meta.aas} (${meta.coreSaturationPct}% CPU Load)`, 448, 40);
+
+    let currentY = 80;
+
+    // Executive Alert Box (if critical issues detected)
+    if (critCount > 0 || meta.coreSaturationPct > 100 || meta.wioCpu > 15) {
+      doc.setFillColor(255, 241, 242); // rose-50
+      doc.setDrawColor(225, 29, 72); // rose-600
+      doc.setLineWidth(1);
+      doc.roundedRect(36, currentY, 540, 26, 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(159, 18, 57);
+      doc.text('PRIORITY PERFORMANCE ALERT:', 46, currentY + 11);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text(
+        `Active bottlenecks: ${critCount} critical threshold breaches, core saturation at ${meta.coreSaturationPct}%, and storage WIO at ${meta.wioCpu}%.`,
+        46,
+        currentY + 20
+      );
+      currentY += 34;
+    }
+
+    // Section 1: Executive KPI Scorecard
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('1. Executive Diagnostic Scorecard & Workload Health', 36, currentY);
+
+    const kpiSummaryRows = [
+      [
+        'Average Active Sessions (AAS)',
+        `${meta.aas} AAS`,
+        `< ${meta.cpuCores} Physical Cores`,
+        meta.aas > meta.cpuCores ? 'CPU STARVATION' : 'NOMINAL'
+      ],
+      [
+        'Active Core Saturation',
+        `${meta.coreSaturationPct}% Load`,
+        '< 75% Capacity Headroom',
+        meta.coreSaturationPct > 100 ? 'OVERLOAD' : meta.coreSaturationPct > 75 ? 'ELEVATED' : 'HEALTHY'
+      ],
+      [
+        'Host Storage Wait (%WIO)',
+        `${meta.wioCpu}% I/O Wait`,
+        '< 15% Maximum Tolerable',
+        meta.wioCpu > 15 ? 'STORAGE BOTTLENECK' : meta.wioCpu > 8 ? 'WARNING' : 'NOMINAL'
+      ],
+      [
+        'Buffer Cache Hit Ratio',
+        `${meta.bufferHit}%`,
+        '> 95% Production Target',
+        meta.bufferHit < 95 ? 'SUB-OPTIMAL' : 'NOMINAL'
+      ],
+      [
+        'PGA Workarea Hit Ratio',
+        `${meta.pgaHit}%`,
+        '> 90% (Prevent TEMP Spill)',
+        meta.pgaHit < 90 ? 'TEMP DISK SPILLING' : 'NOMINAL'
+      ],
+      [
+        'Hard Parse Frequency',
+        `${meta.hardParsePct}% (${meta.parseCallsPerSec.toLocaleString()}/s)`,
+        '< 3% Optimal Bound',
+        meta.hardParsePct > 5 ? 'PARSE STORM' : 'NOMINAL'
+      ],
+      [
+        'Workload Velocity',
+        `${meta.elapsedMinutes}m Elapsed / ${meta.dbTimeMinutes}m DB Time`,
+        `${meta.executionsPerSec.toLocaleString()} execs/s`,
+        `${meta.transactionsPerSec.toLocaleString()} tx/sec`
+      ]
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [['Key Performance Indicator', 'Observed Value', 'Benchmark SLA Reference', 'Health Status']],
+      body: kpiSummaryRows,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 48, left: 36, right: 36, bottom: 40 },
+      showHead: 'everyPage',
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body' && hookData.column.index === 3) {
+          const val = String(hookData.cell.raw);
+          if (val.includes('STARVATION') || val.includes('OVERLOAD') || val.includes('BOTTLENECK') || val.includes('SPILLING') || val.includes('STORM')) {
+            hookData.cell.styles.textColor = [190, 18, 60];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (val.includes('WARNING') || val.includes('ELEVATED') || val.includes('SUB-OPTIMAL')) {
+            hookData.cell.styles.textColor = [180, 83, 9];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (val.includes('NOMINAL') || val.includes('HEALTHY')) {
+            hookData.cell.styles.textColor = [4, 120, 87];
+            hookData.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    });
+
+    currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 12 : 220;
+
+    // Section 2: Forensic Key Findings
+    currentY = ensureSpace(75, currentY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('2. Primary Forensic Findings & Root Cause Analysis', 36, currentY);
+
+    const findingsRows = meta.keyFindings.slice(0, 4).map((f, i) => [`#${i + 1}`, f]);
+    if (meta.suggestedAction) {
+      findingsRows.push(['Action', meta.suggestedAction]);
+    }
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [['Item', 'Forensic Observation / Root Cause Finding']],
+      body: findingsRows,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles: { fontSize: 6.8, textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 48, left: 36, right: 36, bottom: 40 },
+      columnStyles: { 0: { cellWidth: 45, fontStyle: 'bold' } },
+      showHead: 'everyPage'
+    });
+
+    currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 12 : 320;
+
+    // Section 3: Top Bottlenecks
+    currentY = ensureSpace(90, currentY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('3. Top Ranked Workload Bottlenecks', 36, currentY);
+
+    const hotspotRows = hotspots.slice(0, 6).map(h => [
+      `#${h.rank}`,
+      h.severity.toUpperCase(),
+      h.name,
+      h.category,
+      `${h.impactPct}%`,
+      h.rootCause
+    ]);
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [['Rank', 'Severity', 'Bottleneck Name', 'Category', 'Impact', 'Primary Root Cause']],
+      body: hotspotRows.length > 0 ? hotspotRows : [['N/A', 'INFO', 'No Active Bottlenecks', 'System', '0%', 'Operating within nominal bounds']],
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles: { fontSize: 6.5, textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 48, left: 36, right: 36, bottom: 40 },
+      showHead: 'everyPage',
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body' && hookData.column.index === 1) {
+          const val = String(hookData.cell.raw);
+          if (val === 'CRITICAL') {
+            hookData.cell.styles.textColor = [190, 18, 60];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (val === 'WARNING') {
+            hookData.cell.styles.textColor = [180, 83, 9];
+            hookData.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    });
+
+    currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 12 : 440;
+
+    // Section 4: 8-Phase Health Matrix
+    currentY = ensureSpace(90, currentY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('4. 8-Phase Systematic Verification Health Matrix', 36, currentY);
+
+    const phaseRows = data.phases.map(p => {
+      const pPass = p.items.filter(i => i.status === 'pass').length;
+      const pWarn = p.items.filter(i => i.status === 'warning').length;
+      const pCrit = p.items.filter(i => i.status === 'critical').length;
+      const st = pCrit > 0 ? 'BREACHED' : pWarn > 0 ? 'WARNING' : 'NOMINAL';
+      return [
+        `Phase ${p.number}`,
+        p.title,
+        String(p.items.length),
+        `${pPass} Pass / ${pWarn} Warn / ${pCrit} Crit`,
+        st
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [['Phase', 'Verification Focus Area', 'Total Rules', 'Result Breakdown', 'Health Status']],
+      body: phaseRows,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles: { fontSize: 6.5, textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 48, left: 36, right: 36, bottom: 40 },
+      showHead: 'everyPage',
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body' && hookData.column.index === 4) {
+          const val = String(hookData.cell.raw);
+          if (val === 'BREACHED') {
+            hookData.cell.styles.textColor = [190, 18, 60];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (val === 'WARNING') {
+            hookData.cell.styles.textColor = [180, 83, 9];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (val === 'NOMINAL') {
+            hookData.cell.styles.textColor = [4, 120, 87];
+            hookData.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    });
+
+    // Running Header & Footer for all pages
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+
+      if (i > 1) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`EXECUTIVE PERFORMANCE BRIEF · ${meta.dbName} (DBID: ${meta.dbId})`, 36, 26);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(36, 32, 576, 32);
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Oracle Performance Audit: Executive Summary · Target: ${meta.dbName} · Confidential · Page ${i} of ${pageCount}`,
+        36,
+        765
+      );
+      doc.text(date, 576, 765, { align: 'right' });
+    }
+
+    doc.save(`${filenamePrefix}_${date}.pdf`);
+  } catch (err) {
+    console.error('Executive PDF export failed, falling back to window.print', err);
+    window.print();
+  }
+}
+
+/**
+ * Exports Beautified Executive Summary to Machine-Readable JSON (.json)
+ */
+export function exportSummaryToJson(data: ExportReportData, filenamePrefix = 'AWR_Executive_Summary') {
+  const meta = resolveReportMetadata(data);
+  const date = data.reportDate || new Date().toISOString().split('T')[0];
+
+  const summaryPayload = {
+    schemaVersion: '2.0.0-summary',
+    reportType: 'Executive Summary Brief',
+    generatedAt: new Date().toISOString(),
+    reportDate: date,
+    targetEnvironment: {
+      dbName: meta.dbName,
+      dbId: meta.dbId,
+      instanceName: meta.instanceName,
+      release: meta.release,
+      hostName: meta.hostName,
+      isRac: meta.isRac,
+      numNodes: meta.numNodes,
+      cpuCores: meta.cpuCores,
+      memoryGb: meta.memoryGb,
+      snapshotWindow: meta.snapRange,
+      elapsedMinutes: meta.elapsedMinutes,
+      dbTimeMinutes: meta.dbTimeMinutes,
+      averageActiveSessions: meta.aas,
+      coreSaturationPct: meta.coreSaturationPct
+    },
+    executiveScorecard: {
+      aas: meta.aas,
+      coreSaturationPct: meta.coreSaturationPct,
+      hostWioPct: meta.wioCpu,
+      hostUserCpuPct: meta.userCpu,
+      bufferCacheHitPct: meta.bufferHit,
+      pgaCacheHitPct: meta.pgaHit,
+      hardParsePct: meta.hardParsePct,
+      logicalReadsPerSec: meta.logicalReadsPerSec,
+      physicalReadsPerSec: meta.physicalReadsPerSec,
+      redoMbPerSec: meta.redoMbPerSec
+    },
+    keyFindings: meta.keyFindings,
+    recommendedRoadmap: meta.suggestedAction,
+    topBottlenecks: data.hotspots.slice(0, 10).map(h => ({
+      rank: h.rank,
+      severity: h.severity,
+      name: h.name,
+      category: h.category,
+      impactPct: h.impactPct,
+      rootCause: h.rootCause
+    })),
+    phaseHealthSummary: data.phases.map(p => ({
+      phaseNumber: p.number,
+      title: p.title,
+      totalRules: p.items.length,
+      passCount: p.items.filter(i => i.status === 'pass').length,
+      warnCount: p.items.filter(i => i.status === 'warning').length,
+      critCount: p.items.filter(i => i.status === 'critical').length
+    }))
+  };
+
+  const jsonStr = JSON.stringify(summaryPayload, null, 2);
+  downloadFile(jsonStr, `${filenamePrefix}_${date}.json`, 'application/json;charset=utf-8');
+}
+
+/**
+ * ============================================================================
+ * TOP ISSUES / BOTTLENECK SUMMARY EXPORT SUITE
+ * ============================================================================
+ * Strictly synchronizes "Copy Summary" and "Export Summary" so both provide
+ * the exact same content, available across Markdown, PDF, Word, Excel, CSV, JSON.
+ */
+
+export function generateTopIssuesSummaryMarkdown(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  dateString?: string
+): string {
+  const date = dateString || new Date().toISOString();
+  let md = `# Top 20 AWR Performance Issues Report\n`;
+  md += `Generated: ${date}\n`;
+  md += `Critical Bottlenecks: ${criticalCount} | Warnings: ${warningCount} | Attention: ${attentionCount}\n\n`;
+  md += `| Rank | Severity | Category | Issue / SQL_ID | Metric Dimension | % Impact |\n`;
+  md += `|---|---|---|---|---|---|\n`;
+  hotspots.forEach(h => {
+    md += `| #${h.rank} | ${h.severity.toUpperCase()} | ${h.category} | ${h.name} | ${h.metricDimension} | ${h.impactPct}% |\n`;
+  });
+  md += `\n## Detailed Issue Evidence & Diagnostics\n\n`;
+  hotspots.forEach(h => {
+    md += `### #${h.rank}: ${h.name}\n`;
+    md += `- **Severity**: ${h.severity.toUpperCase()}\n`;
+    md += `- **Category**: ${h.category}\n`;
+    md += `- **Impact**: ${h.impactPct}%\n`;
+    md += `- **Metric**: ${h.metricDimension}\n`;
+    md += `- **Breached Threshold**: ${h.thresholdBreached}\n`;
+    md += `- **Root Cause**: ${h.rootCause}\n`;
+    md += `- **AWR Section Evidence**: ${h.evidenceSummary} (${h.awrSourceSection})\n`;
+    if (h.perExecutionCost) {
+      md += `- **Per-Execution Cost**: ${h.perExecutionCost.elapsedPerExecMs || 'N/A'} elapsed, ${h.perExecutionCost.getsPerExec || 'N/A'} buffer gets\n`;
+    }
+    if (h.sqlText) {
+      md += `\n**Complete Statement Text (from Complete List of SQL Text):**\n\`\`\`sql\n${h.sqlText}\n\`\`\`\n`;
+    }
+    md += `**Live Oracle Diagnostic Command:**\n\`\`\`sql\n${h.diagnosticSql}\n\`\`\`\n\n`;
+  });
+  return md;
+}
+
+export function exportTopIssuesSummaryToMarkdown(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  filenamePrefix = 'AWR_Top_Issues_Summary'
+) {
+  const md = generateTopIssuesSummaryMarkdown(hotspots, criticalCount, warningCount, attentionCount);
+  const date = new Date().toISOString().split('T')[0];
+  downloadFile(md, `${filenamePrefix}_${date}.md`, 'text/markdown;charset=utf-8');
+}
+
+export function exportTopIssuesSummaryToCsv(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  filenamePrefix = 'AWR_Top_Issues_Summary'
+) {
+  const date = new Date().toISOString().split('T')[0];
+  const escapeCsv = (str: string | number | undefined | null) => {
+    if (str === undefined || str === null) return '""';
+    const s = String(str).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows: string[] = [];
+  rows.push('"--- TOP AWR PERFORMANCE ISSUES REPORT ---"');
+  rows.push(`"Generated: ${date}"`);
+  rows.push(`"Critical Bottlenecks: ${criticalCount}","Warnings: ${warningCount}","Attention: ${attentionCount}"`);
+  rows.push('');
+  rows.push([
+    'Rank',
+    'Severity',
+    'Category',
+    'Issue / SQL_ID',
+    'Metric Dimension',
+    '% Impact',
+    'Breached Threshold',
+    'Root Cause',
+    'AWR Section Evidence',
+    'Per-Execution Cost',
+    'Complete SQL Text',
+    'Live Diagnostic Query'
+  ].map(escapeCsv).join(','));
+
+  hotspots.forEach(h => {
+    const cost = h.perExecutionCost 
+      ? `${h.perExecutionCost.elapsedPerExecMs || 'N/A'} elapsed, ${h.perExecutionCost.getsPerExec || 'N/A'} buffer gets`
+      : 'N/A';
+    rows.push([
+      `#${h.rank}`,
+      h.severity.toUpperCase(),
+      h.category,
+      h.name,
+      h.metricDimension,
+      `${h.impactPct}%`,
+      h.thresholdBreached,
+      h.rootCause,
+      `${h.evidenceSummary} (${h.awrSourceSection})`,
+      cost,
+      h.sqlText || 'N/A',
+      h.diagnosticSql
+    ].map(escapeCsv).join(','));
+  });
+
+  const csv = rows.join('\r\n');
+  downloadFile(csv, `${filenamePrefix}_${date}.csv`, 'text/csv;charset=utf-8');
+}
+
+export function exportTopIssuesSummaryToJson(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  filenamePrefix = 'AWR_Top_Issues_Summary'
+) {
+  const date = new Date().toISOString().split('T')[0];
+  const payload = {
+    reportType: 'Top AWR Performance Issues Report',
+    generatedAt: new Date().toISOString(),
+    summaryMetrics: {
+      criticalBottlenecks: criticalCount,
+      warnings: warningCount,
+      attention: attentionCount,
+      totalIssues: hotspots.length
+    },
+    issues: hotspots.map(h => ({
+      rank: h.rank,
+      severity: h.severity,
+      category: h.category,
+      name: h.name,
+      metricDimension: h.metricDimension,
+      impactPct: h.impactPct,
+      thresholdBreached: h.thresholdBreached,
+      rootCause: h.rootCause,
+      evidenceSummary: h.evidenceSummary,
+      awrSourceSection: h.awrSourceSection,
+      perExecutionCost: h.perExecutionCost,
+      sqlText: h.sqlText,
+      diagnosticSql: h.diagnosticSql
+    }))
+  };
+
+  downloadFile(JSON.stringify(payload, null, 2), `${filenamePrefix}_${date}.json`, 'application/json;charset=utf-8');
+}
+
+export function exportTopIssuesSummaryToWord(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  filenamePrefix = 'AWR_Top_Issues_Summary'
+) {
+  const date = new Date().toISOString().split('T')[0];
+  let doc = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset='utf-8'>
+<title>Top AWR Performance Issues Report</title>
+<style>
+  body { font-family: Segoe UI, Arial, sans-serif; font-size: 10pt; line-height: 1.5; color: #1e293b; margin: 30pt; }
+  h1 { font-size: 16pt; font-weight: bold; color: #0f172a; margin-bottom: 4pt; }
+  .subtitle { font-size: 9.5pt; color: #475569; margin-bottom: 12pt; }
+  .badge-crit { background: #ffe4e6; color: #9f1239; font-weight: bold; padding: 2pt 4pt; }
+  .badge-warn { background: #fef3c7; color: #92400e; font-weight: bold; padding: 2pt 4pt; }
+  .badge-att { background: #e0f2fe; color: #0369a1; font-weight: bold; padding: 2pt 4pt; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 14pt; }
+  th { background-color: #0f172a; color: #fff; font-size: 9pt; padding: 6pt 8pt; border: 1pt solid #334155; text-align: left; }
+  td { border: 1pt solid #cbd5e1; padding: 5pt 7pt; font-size: 9pt; vertical-align: top; }
+  pre { background-color: #0f172a; color: #f8fafc; font-family: Consolas, monospace; font-size: 8.5pt; padding: 8pt; border-radius: 4pt; white-space: pre-wrap; word-break: break-all; }
+  .issue-card { margin-bottom: 14pt; padding: 10pt; border: 1pt solid #cbd5e1; background-color: #f8fafc; }
+</style>
+</head>
+<body>
+<h1>Top 20 AWR Performance Issues Report</h1>
+<div class="subtitle">
+  <strong>Generated:</strong> ${date} | 
+  <strong>Critical Bottlenecks:</strong> ${criticalCount} | 
+  <strong>Warnings:</strong> ${warningCount} | 
+  <strong>Attention:</strong> ${attentionCount}
+</div>
+
+<h2>1. Ranked Workload Bottlenecks</h2>
+<table>
+  <tr>
+    <th style="width: 8%;">Rank</th>
+    <th style="width: 12%;">Severity</th>
+    <th style="width: 16%;">Category</th>
+    <th style="width: 28%;">Issue / SQL_ID</th>
+    <th style="width: 22%;">Metric Dimension</th>
+    <th style="width: 14%;">% Impact</th>
+  </tr>`;
+
+  hotspots.forEach(h => {
+    const badgeClass = h.severity === 'critical' ? 'badge-crit' : h.severity === 'warning' ? 'badge-warn' : 'badge-att';
+    doc += `
+  <tr>
+    <td>#${h.rank}</td>
+    <td><span class="${badgeClass}">${h.severity.toUpperCase()}</span></td>
+    <td>${escapeXml(h.category)}</td>
+    <td><strong>${escapeXml(h.name)}</strong></td>
+    <td>${escapeXml(h.metricDimension)}</td>
+    <td><strong>${h.impactPct}%</strong></td>
+  </tr>`;
+  });
+
+  doc += `
+</table>
+
+<h2>2. Detailed Issue Evidence & Diagnostics</h2>`;
+
+  hotspots.forEach(h => {
+    const badgeClass = h.severity === 'critical' ? 'badge-crit' : h.severity === 'warning' ? 'badge-warn' : 'badge-att';
+    doc += `
+<div class="issue-card">
+  <div style="font-size: 11pt; font-weight: bold; margin-bottom: 4pt;">
+    #${h.rank}: ${escapeXml(h.name)} <span class="${badgeClass}">${h.severity.toUpperCase()}</span> · ${escapeXml(h.category)} · Impact: ${h.impactPct}%
+  </div>
+  <div><strong>Metric:</strong> ${escapeXml(h.metricDimension)} | <strong>Breached Threshold:</strong> ${escapeXml(h.thresholdBreached)}</div>
+  <div><strong>Root Cause:</strong> ${escapeXml(h.rootCause)}</div>
+  <div><strong>AWR Evidence:</strong> ${escapeXml(h.evidenceSummary)} (${escapeXml(h.awrSourceSection)})</div>`;
+
+    if (h.perExecutionCost) {
+      doc += `<div><strong>Per-Execution Cost:</strong> ${escapeXml(h.perExecutionCost.elapsedPerExecMs || 'N/A')} elapsed, ${escapeXml(h.perExecutionCost.getsPerExec || 'N/A')} buffer gets</div>`;
+    }
+
+    if (h.sqlText) {
+      doc += `<div style="margin-top: 6pt;"><strong>Complete Statement Text:</strong></div><pre>${escapeXml(h.sqlText)}</pre>`;
+    }
+
+    doc += `<div style="margin-top: 6pt;"><strong>Live Diagnostic SQL:</strong></div><pre>${escapeXml(h.diagnosticSql)}</pre>
+</div>`;
+  });
+
+  doc += `
+</body>
+</html>`;
+
+  downloadFile(doc, `${filenamePrefix}_${date}.doc`, 'application/msword;charset=utf-8');
+}
+
+export function exportTopIssuesSummaryToExcel(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  filenamePrefix = 'AWR_Top_Issues_Summary'
+) {
+  const date = new Date().toISOString().split('T')[0];
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Title>Top AWR Performance Issues Report</Title>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#1E293B"/>
+  </Style>
+  <Style ss:ID="TitleStyle">
+   <Font ss:FontName="Segoe UI" ss:Size="14" ss:Color="#0F172A" ss:Bold="1"/>
+  </Style>
+  <Style ss:ID="HeaderStyle">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#334155"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="CellBold">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#0F172A" ss:Bold="1"/>
+  </Style>
+  <Style ss:ID="CellNormal">
+   <Font ss:FontName="Segoe UI" ss:Size="9.5" ss:Color="#334155"/>
+  </Style>
+  <Style ss:ID="CellCode">
+   <Font ss:FontName="Consolas" ss:Size="9" ss:Color="#0F172A"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Top Bottlenecks">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="50"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="180"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="260"/>
+   <Column ss:Width="260"/>
+   <Row ss:Height="24">
+    <Cell ss:MergeAcross="7" ss:StyleID="TitleStyle"><Data ss:Type="String">Top AWR Performance Issues Report</Data></Cell>
+   </Row>
+   <Row ss:Height="18">
+    <Cell ss:MergeAcross="7" ss:StyleID="CellNormal"><Data ss:Type="String">Generated: ${date} | Critical: ${criticalCount} | Warnings: ${warningCount} | Attention: ${attentionCount}</Data></Cell>
+   </Row>
+   <Row ss:Height="8"/>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Rank</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Severity</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Category</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Issue Name / SQL_ID</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Metric Dimension</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">% Impact</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Root Cause Assessment</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">AWR Evidence Summary</Data></Cell>
+   </Row>`;
+
+  hotspots.forEach(h => {
+    xml += `
+   <Row>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">#${h.rank}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${h.severity.toUpperCase()}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(h.category)}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${escapeXml(h.name)}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(h.metricDimension)}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${h.impactPct}%</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(h.rootCause)}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${escapeXml(h.evidenceSummary)}</Data></Cell>
+   </Row>`;
+  });
+
+  xml += `
+  </Table>
+ </Worksheet>
+ <Worksheet ss:Name="SQL & Diagnostics">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="50"/>
+   <Column ss:Width="160"/>
+   <Column ss:Width="350"/>
+   <Column ss:Width="350"/>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Rank</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Issue Name</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Complete SQL Statement Text</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Live Diagnostic Query</Data></Cell>
+   </Row>`;
+
+  hotspots.forEach(h => {
+    xml += `
+   <Row>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">#${h.rank}</Data></Cell>
+    <Cell ss:StyleID="CellBold"><Data ss:Type="String">${escapeXml(h.name)}</Data></Cell>
+    <Cell ss:StyleID="CellCode"><Data ss:Type="String">${escapeXml(h.sqlText || 'N/A')}</Data></Cell>
+    <Cell ss:StyleID="CellCode"><Data ss:Type="String">${escapeXml(h.diagnosticSql)}</Data></Cell>
+   </Row>`;
+  });
+
+  xml += `
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+  downloadFile(xml, `${filenamePrefix}_${date}.xls`, 'application/vnd.ms-excel;charset=utf-8');
+}
+
+export function exportTopIssuesSummaryToPdf(
+  hotspots: HotspotItem[],
+  criticalCount: number,
+  warningCount: number,
+  attentionCount: number,
+  filenamePrefix = 'AWR_Top_Issues_Summary'
+) {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'a4'
+    });
+
+    const date = new Date().toISOString().split('T')[0];
+
+    // Header Band
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 595.28, 45, 'F');
+    doc.setFillColor(217, 119, 6);
+    doc.rect(0, 45, 595.28, 3, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(255, 255, 255);
+    doc.text('TOP 20 AWR PERFORMANCE ISSUES REPORT', 36, 28);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225);
+    doc.text(`Generated: ${date} · Critical: ${criticalCount} · Warnings: ${warningCount} · Attention: ${attentionCount}`, 36, 40);
+
+    const tableRows = hotspots.map(h => [
+      `#${h.rank}`,
+      h.severity.toUpperCase(),
+      h.category,
+      h.name,
+      h.metricDimension,
+      `${h.impactPct}%`,
+      h.rootCause
+    ]);
+
+    autoTable(doc, {
+      startY: 60,
+      head: [['Rank', 'Severity', 'Category', 'Issue / SQL_ID', 'Metric Dimension', '% Impact', 'Root Cause Assessment']],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7 },
+      bodyStyles: { fontSize: 6.5, textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 55, left: 36, right: 36, bottom: 40 },
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body' && hookData.column.index === 1) {
+          const val = String(hookData.cell.raw);
+          if (val === 'CRITICAL') {
+            hookData.cell.styles.textColor = [190, 18, 60];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (val === 'WARNING') {
+            hookData.cell.styles.textColor = [180, 83, 9];
+            hookData.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    });
+
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Top AWR Performance Issues Summary · Page ${i} of ${pageCount}`, 36, 820);
+      doc.text(date, 559, 820, { align: 'right' });
+    }
+
+    doc.save(`${filenamePrefix}_${date}.pdf`);
+  } catch (err) {
+    console.error('PDF export failed, printing window instead', err);
+    window.print();
+  }
+}

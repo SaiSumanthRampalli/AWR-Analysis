@@ -21,7 +21,8 @@ import {
   FileCode,
   Printer,
   Layers,
-  Sparkles
+  Sparkles,
+  Terminal
 } from 'lucide-react';
 import { AwrBenchmarkScenario, VerificationItem } from '../types/awr';
 import { sampleScenarios } from '../data/sampleScenarios';
@@ -153,11 +154,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Dropdown Menu */}
               {isExportDropdownOpen && (
                 <div 
-                  className="absolute right-0 top-full mt-2 w-60 rounded-xl bg-slate-900/98 backdrop-blur-xl border border-slate-700/80 shadow-2xl p-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-150 space-y-0.5 ring-1 ring-slate-800"
+                  className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-slate-900/98 backdrop-blur-xl border border-slate-700/80 shadow-2xl p-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-150 space-y-1 ring-1 ring-slate-800"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold">
-                    Direct Download
+                  <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold flex items-center justify-between">
+                    <span>Diagnostic Dossier Exports</span>
+                    <Layers className="w-3 h-3 text-slate-400" />
                   </div>
 
                   <button
@@ -165,14 +167,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsExportDropdownOpen(false);
-                      onDirectExport ? onDirectExport('excel') : onOpenExportHub();
+                      onDirectExport ? onDirectExport('excel') : onOpenExportHub?.();
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-emerald-950/40 text-slate-200 hover:text-emerald-300 transition-colors cursor-pointer"
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <div className="text-left">
-                      <span className="font-semibold text-xs block leading-tight">Microsoft Excel</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Multi-Tab (.xls)</span>
+                      <span className="font-semibold text-xs block leading-tight">Full Excel Workbook</span>
+                      <span className="text-[10px] text-slate-400 font-mono">8 Multi-Tab Worksheets (.xls)</span>
                     </div>
                   </button>
 
@@ -181,14 +183,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsExportDropdownOpen(false);
-                      onDirectExport ? onDirectExport('word') : onOpenExportHub();
+                      onDirectExport ? onDirectExport('word') : onOpenExportHub?.();
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-blue-950/40 text-slate-200 hover:text-blue-300 transition-colors cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                     <div className="text-left">
-                      <span className="font-semibold text-xs block leading-tight">Microsoft Word</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Document (.doc)</span>
+                      <span className="font-semibold text-xs block leading-tight">Full Word Audit Report</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Incident Dossier (.doc)</span>
                     </div>
                   </button>
 
@@ -197,14 +199,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsExportDropdownOpen(false);
-                      onDirectExport ? onDirectExport('pdf') : onOpenExportHub();
+                      onDirectExport ? onDirectExport('pdf') : onOpenExportHub?.();
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-rose-950/40 text-slate-200 hover:text-rose-300 transition-colors cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                     <div className="text-left">
-                      <span className="font-semibold text-xs block leading-tight">Executive Dossier</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Native PDF (.pdf)</span>
+                      <span className="font-semibold text-xs block leading-tight">Full Diagnostic PDF</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Complete Audit Dossier (.pdf)</span>
                     </div>
                   </button>
 
@@ -213,14 +215,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsExportDropdownOpen(false);
-                      onDirectExport ? onDirectExport('markdown') : onOpenExportHub();
+                      onDirectExport ? onDirectExport('markdown') : onOpenExportHub?.();
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-amber-950/40 text-slate-200 hover:text-amber-300 transition-colors cursor-pointer"
                   >
                     <FileCode className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                     <div className="text-left">
                       <span className="font-semibold text-xs block leading-tight">Engineering Markdown</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Spec File (.md)</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Developer Spec (.md)</span>
                     </div>
                   </button>
 
@@ -229,14 +231,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsExportDropdownOpen(false);
-                      onDirectExport ? onDirectExport('csv') : onOpenExportHub();
+                      onDirectExport ? onDirectExport('csv') : onOpenExportHub?.();
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-cyan-950/40 text-slate-200 hover:text-cyan-300 transition-colors cursor-pointer"
                   >
                     <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                     <div className="text-left">
-                      <span className="font-semibold text-xs block leading-tight">RFC 4180 Table Data</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Raw CSV (.csv)</span>
+                      <span className="font-semibold text-xs block leading-tight">Structured CSV Data</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Data Pipeline Table (.csv)</span>
                     </div>
                   </button>
 
@@ -245,16 +247,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsExportDropdownOpen(false);
-                      onDirectExport ? onDirectExport('json') : onOpenExportHub();
+                      onDirectExport ? onDirectExport('json') : onOpenExportHub?.();
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-purple-950/40 text-slate-200 hover:text-purple-300 transition-colors cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                     <div className="text-left">
-                      <span className="font-semibold text-xs block leading-tight">Machine JSON</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Telemetry (.json)</span>
+                      <span className="font-semibold text-xs block leading-tight">Machine-Readable JSON</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Full Telemetry Schema (.json)</span>
                     </div>
                   </button>
+
+                  <div className="pt-1 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsExportDropdownOpen(false);
+                        onOpenExportHub?.();
+                      }}
+                      className="w-full text-center py-1.5 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
+                    >
+                      Open Export Command Hub...
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -296,6 +312,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {unreadHotspotCount}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('commands')}
+            className={`transition-colors whitespace-nowrap px-2 py-1 rounded text-xs flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'commands' ? 'bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Top 20 Hotspots with Oracle Diagnostic Commands"
+          >
+            <Terminal className="w-3 h-3 text-amber-400" />
+            <span>Oracle Diagnostic Commands</span>
           </button>
           <button
             onClick={() => setActiveTab('runbook')}

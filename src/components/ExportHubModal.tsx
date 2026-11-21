@@ -40,7 +40,7 @@ export const ExportHubModal: React.FC<ExportHubModalProps> = ({
   onClose,
   data
 }) => {
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('excel');
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'formats' | 'preview'>('formats');
@@ -104,20 +104,20 @@ export const ExportHubModal: React.FC<ExportHubModalProps> = ({
     },
     {
       id: 'pdf',
-      name: 'Printable Executive PDF',
+      name: 'Full Diagnostic PDF',
       extension: '.pdf',
       badge: 'OFFICIAL DOSSIER',
       description: 'Corporate print-optimized audit dossier formatted with running headers/footers, forensic findings, tables, and complete SQL statements.',
       icon: <Printer className="w-5 h-5 text-rose-400" />,
       colorClasses: 'hover:border-rose-500/50 bg-rose-950/10 text-rose-300',
-      recommendedFor: 'Executive debriefs, SLA reviews, incident post-mortems'
+      recommendedFor: 'Comprehensive engineering debriefs, deep technical audits'
     },
     {
       id: 'word',
-      name: 'Microsoft Word Document',
+      name: 'Full Word Audit Report',
       extension: '.doc',
       badge: 'INCIDENT REPORT',
-      description: 'Fully formatted Word audit document with executive summary, tables, alert callouts, remediation roadmap, and dark syntax SQL blocks.',
+      description: 'Comprehensive Word document with executive summary, tables, alert callouts, remediation roadmap, and dark syntax SQL blocks.',
       icon: <FileText className="w-5 h-5 text-blue-400" />,
       colorClasses: 'hover:border-blue-500/50 bg-blue-950/10 text-blue-300',
       recommendedFor: 'Formal engineering reports, change requests, Word/Docs'
@@ -248,7 +248,7 @@ export const ExportHubModal: React.FC<ExportHubModalProps> = ({
             {/* Format Selection Cards Grid */}
             <div className="space-y-3">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                <span>Select Export Format</span>
+                <span>Select Diagnostic Export Format</span>
                 <span className="text-[10px] text-slate-500 font-mono">Direct 1-Click Client Download</span>
               </div>
 
@@ -383,10 +383,10 @@ export const ExportHubModal: React.FC<ExportHubModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleExecuteExport(selectedFormat)}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded transition-colors flex items-center gap-1.5 shadow-md shadow-amber-950/40"
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded transition-colors flex items-center gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
             >
               <Download className="w-4 h-4" />
-              <span>Download Selected ({selectedFormat.toUpperCase()})</span>
+              <span>Download Full Dossier ({selectedFormat.toUpperCase()})</span>
             </button>
             <button
               onClick={onClose}
